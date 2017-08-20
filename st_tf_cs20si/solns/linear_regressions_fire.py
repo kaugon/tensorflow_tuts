@@ -65,7 +65,7 @@ def linear_regression(data):
 		sess.run(tf.global_variables_initializer())
 
 		# log everything
-		writer = tf.summary.FileWriter("./linear_regress", sess.graph)
+		writer = tf.summary.FileWriter("./logs/linear_regress", sess.graph)
 
 		print "Training model.."
 		# epochs

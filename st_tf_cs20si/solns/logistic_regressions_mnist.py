@@ -92,7 +92,7 @@ class LogisticRegressionModel(object):
 			sess.run(tf.global_variables_initializer())
 			
 			# restore previous session
-			ckpt = tf.train.get_checkpoint_state(os.path.dirname('checkpoints/checkpoint'))
+			ckpt = tf.train.get_checkpoint_state(os.path.dirname('./logs/logit_regress/checkpoints/checkpoint'))
 			if RESTORE_MODEL and ckpt and ckpt.model_checkpoint_path:
 				print "Restoring checkpoint %s" % ckpt.model_checkpoint_path
 				saver.restore(sess, ckpt.model_checkpoint_path)
@@ -102,7 +102,7 @@ class LogisticRegressionModel(object):
 			start_time = time.time()
 
 			# log everything
-			logdir = "%s/run_%s" % ("./logit_regress/", long(start_time))
+			logdir = "%s/run_%s" % ("./logs/logit_regress/tbevents/", long(start_time))
 			print "Tensorboard run: %s" % logdir
 			writer = tf.summary.FileWriter(logdir, sess.graph)
 
@@ -123,7 +123,7 @@ class LogisticRegressionModel(object):
 				# checkpoint training model data (not actual model)
 				if (epoch%10) == 0:
 					print "Saving checkpoint.."
-					saver.save(sess, 'checkpoints/kau_logit_regress', epoch)
+					saver.save(sess, './logs/logit_regress/checkpoints/model', epoch)
 					self.validate_model(sess)
 			print "Done. Traing time: %s seconds" % (time.time() - start_time)
 		writer.close()
