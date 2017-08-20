@@ -17,7 +17,7 @@ MODEL_NAME="convnet_mnist"
 N_CLASSES = 10
 
 BATCH_SIZE = 128
-EPOCH_SIZE = 100
+EPOCH_SIZE = 5
 
 # FC dropout rate
 DROPOUT_RATE=0.75
@@ -39,20 +39,8 @@ class ConvnetModel(object):
             self._x = tf.placeholder(tf.float32, shape=[self._batch_size, 784], name="image")
             self._y = tf.placeholder(tf.int32, shape=[self._batch_size, 10], name="labels")
 
-    def create_model(self):
+    def create_model_small(self):
         """
-            Laptop cpu intel i5 - DDR 8GB cant handle this network
-            Need GPU:
- 
-            conv1,      i=28x28x1,  k=5x5x1x32,    s=1x1, o=28x28x32 
-            pool1,      i=28x28x32, k=2x2,         s=2x2, o=14x14x32
-            conv2,      i=14x14x32, k=5x5x32x54,   s=1x1, o=14x14x64 
-            pool2,      i=14x14x64, k=2x2,         s=2x2, o=7x7x64
-            fc,         i=7x7x64,   k=7x7x64x1024, s=,    o=1024
-            fc_dropout,
-            softmax_linear, i=1024, k=1024x10,     s=,    o=10
-            softmax,
-
             Small model:
             Laptop CPU needs less layers and less Ni i.e. 32 to 4
             conv1,      i=28x28x1,  k=5x5x1x4,     s=1x1, o=28x28x4 
@@ -65,21 +53,64 @@ class ConvnetModel(object):
          """
         with tf.variable_scope('conv1') as scope:
             inputd = tf.reshape(self._x, shape=[self._batch_size, 28, 28, 1])
-            #kernel = tf.Variable(tf.random_normal(shape=[5,5,1,32],stddev=0.01), 
             kernel = tf.Variable(tf.random_normal(shape=[5,5,1,4],stddev=0.01), 
                         name="weights")
             biases = tf.Variable(tf.zeros(shape=[4]),
-            #biases = tf.Variable(tf.zeros(shape=[32]),
+                        name="biases")
+            #conv operation is without bias
+            conv1b = tf.nn.conv2d(inputd, kernel, strides=[1,1,1,1], padding="SAME")
+            conv1b = tf.add(conv1b, biases)
+            conv1 = tf.nn.relu(conv1b, name=scope.name) 
+            self.create_summary_var(kernel)
+            self.create_summary_var(biases)
+            tf.summary.histogram("conv1_results", conv1b)
+            tf.summary.histogram("conv1_activations", conv1)
+
+        with tf.variable_scope('pool1') as scope:
+            pool1 = tf.nn.max_pool(conv1, ksize=[1,4,4,1], 
+                strides=[1,4,4,1], padding="SAME")
+
+        with tf.variable_scope('softmax_linear') as scope:
+            #inputd = fc_dropout
+            inputd = tf.reshape(pool1, shape=[-1, 7*7*4])
+            kernel = tf.Variable(tf.random_normal(shape=[7*7*4, N_CLASSES]
+                        ,stddev=0.01), 
+                        name="weights")
+            biases = tf.Variable(tf.zeros(shape=[N_CLASSES]),
+                        name="biases")
+            self._logits = tf.matmul(inputd, kernel) + biases
+            self.create_summary_var(kernel)
+            self.create_summary_var(biases)
+            tf.summary.histogram(scope.name+"_results", self._logits)
+
+
+    def create_model_big(self):
+        """
+            Laptop cpu intel i5 - DDR 8GB cant handle this network
+            Need GPU:
+ 
+            conv1,      i=28x28x1,  k=5x5x1x32,    s=1x1, o=28x28x32 
+            pool1,      i=28x28x32, k=2x2,         s=2x2, o=14x14x32
+            conv2,      i=14x14x32, k=5x5x32x54,   s=1x1, o=14x14x64 
+            pool2,      i=14x14x64, k=2x2,         s=2x2, o=7x7x64
+            fc,         i=7x7x64,   k=7x7x64x1024, s=,    o=1024
+            fc_dropout,
+            softmax_linear, i=1024, k=1024x10,     s=,    o=10
+            softmax,
+         """
+        with tf.variable_scope('conv1') as scope:
+            inputd = tf.reshape(self._x, shape=[self._batch_size, 28, 28, 1])
+            kernel = tf.Variable(tf.random_normal(shape=[5,5,1,32],stddev=0.01), 
+                        name="weights")
+            biases = tf.Variable(tf.zeros(shape=[32]),
                         name="biases")
             #conv operation is without bias
             conv1b = tf.nn.conv2d(inputd, kernel, strides=[1,1,1,1], padding="SAME")
             conv1 = tf.nn.relu(conv1b+biases, name=scope.name) 
 
         with tf.variable_scope('pool1') as scope:
-            #pool1 = tf.nn.max_pool(conv1, ksize=[1,2,2,1], strides=[1,2,2,1], padding="SAME")
-            pool1 = tf.nn.max_pool(conv1, ksize=[1,4,4,1], strides=[1,4,4,1], padding="SAME")
+            pool1 = tf.nn.max_pool(conv1, ksize=[1,2,2,1], strides=[1,2,2,1], padding="SAME")
 
-        """
         with tf.variable_scope('conv2') as scope:
             kernel = tf.Variable(tf.random_normal(shape=[5,5,32,64],stddev=0.01), 
                         name="weights")
@@ -102,23 +133,22 @@ class ConvnetModel(object):
 
         with tf.variable_scope('fc_dropout') as scope:
             fc_dropout = tf.nn.dropout(fc, keep_prob=DROPOUT_RATE, name=scope.name)
-        """
 
         with tf.variable_scope('softmax_linear') as scope:
-            #inputd = fc_dropout
-            inputd = tf.reshape(pool1, shape=[-1, 7*7*4])
-            #kernel = tf.Variable(tf.random_normal(shape=[1024, N_CLASSES],stddev=0.01),
-            kernel = tf.Variable(tf.random_normal(shape=[7*7*4, N_CLASSES],stddev=0.01), 
+            inputd = fc_dropout
+            kernel = tf.Variable(tf.random_normal(shape=[1024, N_CLASSES],stddev=0.01),
                         name="weights")
             biases = tf.Variable(tf.zeros(shape=[N_CLASSES]),
                         name="biases")
             self._logits = tf.matmul(inputd, kernel) + biases
 
     def create_loss(self):
-        # softmax and loss combined in single tf function
-        y_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=self._logits,
-                    labels=self._y, name="y_softmax")
-        self._loss = tf.reduce_mean(y_entropy)
+        with tf.name_scope('loss') as scope:
+           # softmax and loss combined in single tf function
+           y_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=self._logits,
+                       labels=self._y, name="y_softmax")
+           self._loss = tf.reduce_mean(y_entropy)
+           self.create_summary_scalar(self._loss)
 
     def create_optimizer(self):
         # minimize loss 
@@ -130,18 +160,32 @@ class ConvnetModel(object):
         adamop = tf.train.AdamOptimizer(learning_rate=0.001)
         self._optimizer = adamop.minimize(self._loss) 
 
-    def create_summaries(self):
-        with tf.name_scope("summaries"):
-            tf.summary.scalar("loss", self._loss)
-            tf.summary.histogram("loss_hist", self._loss)
-            self._summary_op = tf.summary.merge_all()
+    def create_summary_scalar(self, var):
+        name = var.name.replace("/", "_")
+        name = name.replace(":", "_")
+        with tf.name_scope(name):
+            tf.summary.scalar("var", var)
+            tf.summary.histogram("var_hist", var)
+
+    def create_summary_var(self, var):
+        name = var.name.replace("/", "_")
+        name = name.replace(":", "_")
+        with tf.name_scope(name):
+            mean = tf.reduce_mean(var)
+            tf.summary.scalar('mean', mean)
+            with tf.name_scope('stddev'):
+               stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
+            tf.summary.scalar('stddev', stddev)
+            tf.summary.scalar('max', tf.reduce_max(var))
+            tf.summary.scalar('min', tf.reduce_min(var))
+            tf.summary.histogram('histogram', var)
 
     def build_model(self):
         self.create_placeholders()
-        self.create_model()
+        self.create_model_small()
         self.create_loss()
         self.create_optimizer()
-        self.create_summaries()
+        #self.create_summaries()
         
     def load_data(self):
         # mnist data
@@ -170,6 +214,8 @@ class ConvnetModel(object):
             # log everything
             logdir = "%s/run_%s" % (TENSORBOARD_DIR, long(start_time))
             print "Tensorboard run: %s" % logdir
+
+            self._summary_op = tf.summary.merge_all()
             writer = tf.summary.FileWriter(logdir, sess.graph)
 
             for epoch in range(1, epoch_size+1):
@@ -191,6 +237,7 @@ class ConvnetModel(object):
                     print "Saving checkpoint.."
                     saver.save(sess, CHECKPOINT_DIR+'/log', epoch)
                     self.validate_model(sess)
+
             print "Done. Traing time: %s seconds" % (time.time() - start_time)
         writer.close()
 
