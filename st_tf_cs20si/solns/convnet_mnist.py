@@ -3,13 +3,15 @@
 ####################################
 
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
+# CPU vs GPU
+#os.environ['CUDA_VISIBLE_DEVICES']=""
+
 import numpy as np
 import time
 
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
-
-os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 
 MODEL_NAME="convnet_mnist"
 
@@ -17,15 +19,18 @@ MODEL_NAME="convnet_mnist"
 N_CLASSES = 10
 
 BATCH_SIZE = 128
-EPOCH_SIZE = 5
+EPOCH_SIZE = 50
 
 # FC dropout rate
 DROPOUT_RATE=0.75
 
 # Start from scratch or checkpointed model
-RESTORE_MODEL = True
-CHECKPOINT_STEP = 1
+RESTORE_MODEL = False
+CHECKPOINT_STEP = EPOCH_SIZE+1 #1 # dont save
+VALIDATION_STEP = 1
 CHECKPOINT_DIR = "./logs/" + MODEL_NAME + "/checkpoint"
+CHECKPOINT_CK_DIR = CHECKPOINT_DIR + '/checkpoint'
+CHECKPOINT_LOG_DIR = CHECKPOINT_DIR + '/logs'
 TENSORBOARD_DIR = "./logs/" + MODEL_NAME + "/eventlogs"
 
 class ConvnetModel(object):
@@ -51,6 +56,7 @@ class ConvnetModel(object):
             With this 3 layer model, accuracy hits 97% with 30 epoch. 
             Doesnt improve much beyond it.
          """
+        print "Creating small model.."
         with tf.variable_scope('conv1') as scope:
             inputd = tf.reshape(self._x, shape=[self._batch_size, 28, 28, 1])
             kernel = tf.Variable(tf.random_normal(shape=[5,5,1,4],stddev=0.01), 
@@ -98,6 +104,7 @@ class ConvnetModel(object):
             softmax_linear, i=1024, k=1024x10,     s=,    o=10
             softmax,
          """
+        print "Creating big model.."
         with tf.variable_scope('conv1') as scope:
             inputd = tf.reshape(self._x, shape=[self._batch_size, 28, 28, 1])
             kernel = tf.Variable(tf.random_normal(shape=[5,5,1,32],stddev=0.01), 
@@ -182,27 +189,29 @@ class ConvnetModel(object):
 
     def build_model(self):
         self.create_placeholders()
-        self.create_model_small()
+        #self.create_model_small()
+        self.create_model_big()
         self.create_loss()
         self.create_optimizer()
         #self.create_summaries()
         
     def load_data(self):
         # mnist data
-        self._data = input_data.read_data_sets('/data/mnist', one_hot=True) 
+        self._data = input_data.read_data_sets('./data/mnist', one_hot=True) 
         self._train_batches = int(self._data.train.num_examples/self._batch_size)
 
     def train_model(self, epoch_size):
         # saver 
         saver = tf.train.Saver()
 
+        #with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         with tf.Session() as sess:
             # global variables init
             sess.run(tf.global_variables_initializer())
             
             # restore previous session
             ckpt = tf.train.get_checkpoint_state(
-                os.path.dirname(CHECKPOINT_DIR+'/checkpoint'))
+                os.path.dirname(CHECKPOINT_CK_DIR))
             if RESTORE_MODEL and ckpt and ckpt.model_checkpoint_path:
                 print "Restoring checkpoint %s" % ckpt.model_checkpoint_path
                 saver.restore(sess, ckpt.model_checkpoint_path)
@@ -235,7 +244,8 @@ class ConvnetModel(object):
                 # checkpoint training model data (not actual model)
                 if (epoch%CHECKPOINT_STEP) == 0:
                     print "Saving checkpoint.."
-                    saver.save(sess, CHECKPOINT_DIR+'/log', epoch)
+                    saver.save(sess, CHECKPOINT_LOG_DIR, epoch)
+                if (epoch%VALIDATION_STEP) == 0:
                     self.validate_model(sess)
 
             print "Done. Traing time: %s seconds" % (time.time() - start_time)
@@ -268,6 +278,10 @@ class ConvnetModel(object):
  
 
 if __name__ == '__main__':
+    for dirs in [CHECKPOINT_CK_DIR, CHECKPOINT_LOG_DIR, TENSORBOARD_DIR]:
+        if not os.path.exists(dirs):
+            os.makedirs(dirs)
+    #with tf.device(DEVICE):
     model = ConvnetModel(BATCH_SIZE)
     model.build_model()
     model.load_data()
